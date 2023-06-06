@@ -1,11 +1,11 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"time"
 	"github.com/robfig/cron"
-	"text/template"
 )
 
 var manpageTemplate = `
@@ -44,13 +44,13 @@ EXIT STATUS
     0 if successful, or an error code if an error occurs.
 
 REPORTING BUGS
-    Report bugs to the GitHub repository: https://github.com/your/beatify
+    Report bugs to the GitHub repository: https://github.com/IT-JONCTION/beatify
 
 AUTHOR
-    Your Name <your.email@example.com>
+    Your Name <wayne@it-jonction-lab.com>
 
 COPYRIGHT
-    Copyright © 2023 Your Organization. This is free software; see the source
+    Copyright © 2023 IT Jonction Lab. This is free software; see the source
     code for copying conditions. There is NO warranty; not even for MERCHANTABILITY
     or FITNESS FOR A PARTICULAR PURPOSE.
 
@@ -58,16 +58,35 @@ SEE ALSO
     The BetterUptime API documentation: https://docs.betteruptime.com/api/
 `
 
+var (
+	authToken string
+	crontabUser string
+	showHelp   bool
+)
+
+func init() {
+	// Define command-line flags
+	flag.StringVar(&authToken, "a", "", "Authentication token for the BetterUptime API")
+	flag.StringVar(&authToken, "auth-token", "", "Authentication token for the BetterUptime API (shorthand)")
+
+	flag.StringVar(&crontabUser, "u", "", "Crontab user to edit")
+	flag.StringVar(&crontabUser, "user", "", "Crontab user to edit (shorthand)")
+
+	flag.BoolVar(&showHelp, "h", false, "Show help message")
+	flag.BoolVar(&showHelp, "help", false, "Show help message (shorthand)")
+
+	// Customize usage message
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "%s\n", manpageTemplate)
+	}
+}
+
 func main() {
-	// Check if the user is requesting the manpage
-	if len(os.Args) > 1 && (os.Args[1] == "-h" || os.Args[1] == "--help") {
-		// Generate and display the manpage
-		tmpl := template.Must(template.New("manpage").Parse(manpageTemplate))
-		err := tmpl.Execute(os.Stdout, nil)
-		if err != nil {
-			fmt.Println("Error rendering manpage:", err)
-			return
-		}
+	flag.Parse()
+
+	if showHelp {
+		// Display the help message and exit
+		flag.Usage()
 		return
 	}
 
