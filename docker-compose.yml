@@ -1,0 +1,12 @@
+version: '3.8'
+services:
+  beatify:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: beatify:latest
+    volumes:
+      - ./test/crontab:/var/spool/cron/crontabs/
+    stdin_open: true
+    tty: true
+    command: go run main.go

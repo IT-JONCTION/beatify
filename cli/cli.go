@@ -4,7 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/user"
 	"strings"
+	"bufio"
+	"io/ioutil"
 )
 
 var (
@@ -96,6 +99,27 @@ func HandleCommandLineOptions() {
 			authToken = promptAuthToken()
 		}
 
+		// Check if crontabUser option is set
+		if crontabUser == "" {
+			// If not set, obtain currently logged-in user
+			currentUser, err := user.Current()
+			if err != nil {
+					fmt.Println("Error obtaining current user:", err)
+					os.Exit(1)
+			}
+			crontabUser = currentUser.Username
+	}
+
+	if crontabUser != "" {
+		// Parse and approve cron tasks
+		cronTasks, err := ParseAndApproveCronTasks()
+		if err != nil {
+			fmt.Println("Error parsing crontab:", err)
+			os.Exit(1)
+		}
+		_ = cronTasks // Suppress the "declared and not used" warning
+	}
+
 	// Rest of your CLI tool logic...
 }
 
@@ -110,4 +134,66 @@ func promptAuthToken() string {
 	authToken = strings.TrimSpace(authToken)
 
 	return authToken
+}
+
+// Function to parse crontab and prompt user for approval
+func ParseAndApproveCronTasks() ([]CronTask, error) {
+	// Read the crontab file
+	data, err := ioutil.ReadFile("/var/spool/cron/crontabs/" + crontabUser)
+	if err != nil {
+		return nil, err
+	}
+
+	// Split file content into lines
+	lines := strings.Split(string(data), "\n")
+
+	approvedCronTasks := []CronTask{}
+
+	for _, line := range lines {
+		// Ignore empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// If cron task contains "uptime.betterstack.com", skip and inform user
+		if strings.Contains(line, "uptime.betterstack.com") {
+			fmt.Println("Skipping cron task containing 'uptime.betterstack.com':", line)
+			continue
+		}
+
+		// Display the cron task and ask for approval
+		fmt.Println("Cron task:", line)
+		if promptApproval() {
+			fields := strings.Fields(line)
+			if len(fields) < 6 {
+				fmt.Println("Skipping invalid cron task:", line)
+				continue
+			}
+
+			// First 5 fields are the spec, the rest is the task
+			spec := strings.Join(fields[:5], " ")
+			task := strings.Join(fields[5:], " ")
+
+			approvedCronTasks = append(approvedCronTasks, CronTask{
+				spec: spec,
+				task: task,
+			})
+		}
+	}
+
+	return approvedCronTasks, nil
+}
+
+type CronTask struct {
+	spec string
+	task string
+}
+
+// Function to prompt the user for approval
+func promptApproval() bool {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("Approve this cron task? (y/n): ")
+	text, _ := reader.ReadString('\n')
+	text = strings.TrimSpace(text)
+	return strings.ToLower(text) == "y"
 }

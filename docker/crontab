@@ -1,0 +1,2 @@
+# Test Cron Job
+* * * * * echo "This is a test cron job" >> /var/log/test-cron.log
