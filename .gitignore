@@ -1,0 +1,39 @@
+# Go binaries and build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go dependencies
+/bin/
+/pkg/
+
+# Generated files
+*.pb.go
+*.pb.gw.go
+*.swagger.json
+/swagger/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+
+# Text editor and IDE files
+*.swp
+*~
+*.bak
+.idea/
+.vscode/
+
+# Logs and temporary files
+/log/
+/temp/
+
+# Ignore the vendor folder if using modules (Go 1.11+)
+# Uncomment the following line if applicable to your project
+# /vendor/
