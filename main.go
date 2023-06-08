@@ -7,11 +7,7 @@ import (
 func main() {
 	cli.HandleCommandLineOptions()
 
-	// // Check if both the crontab schedule and heartbeat name are provided as command-line arguments
-	// if len(os.Args) < 3 {
-	// 	fmt.Println("Please provide the crontab schedule and heartbeat name as command-line arguments.")
-	// 	return
-	// }
+
 
 	// // Read the crontab schedule and heartbeat name from command-line arguments
 	// crontab := os.Args[1]
