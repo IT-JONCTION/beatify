@@ -123,13 +123,18 @@ func HandleCommandLineOptions() {
 			data, err := heartbeat.PrepareConfigJson(cronTask.Spec, cronTask.Name)
 			if err != nil {
 				fmt.Println("Error preparing config JSON:", err)
-				return
+				continue // Skip to the next iteration of the loop
 			}
 			jsonData = data
 
 			fmt.Println(jsonData)
+			// Create the Heartbeat
+			responseBodyUrl, err := heartbeat.CreateHeartbeat(authToken, data)
+			if err != nil {
+				fmt.Println("Error creating heartbeat:", err)
+				continue // Skip to the next iteration of the loop
+			}
+			fmt.Println("Heartbeat created successfully:", responseBodyUrl)
 		}
 	}
-
-	// Rest of your CLI tool logic...
 }
