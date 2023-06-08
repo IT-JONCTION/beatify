@@ -96,6 +96,7 @@ type CronTask struct {
 	Spec string
 	Task string
 	Name string
+	HeartbeatURL string
 }
 
 // Function to prompt the user for approval

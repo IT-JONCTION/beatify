@@ -93,22 +93,22 @@ func HandleCommandLineOptions() {
 		flag.Usage()
 		os.Exit(0)
 	}
-	
-		// Check if authToken is set
-		if authToken == "" {
-			// Prompt the user to enter the authToken
-			authToken = config.PromptAuthToken()
-		}
 
-		// Check if crontabUser option is set
-		if crontabUser == "" {
-			// If not set, obtain currently logged-in user
-			currentUser, err := user.Current()
-			if err != nil {
-					fmt.Println("Error obtaining current user:", err)
-					os.Exit(1)
-			}
-			crontabUser = currentUser.Username
+	// Check if authToken is set
+	if authToken == "" {
+		// Prompt the user to enter the authToken
+		authToken = config.PromptAuthToken()
+	}
+
+	// Check if crontabUser option is set
+	if crontabUser == "" {
+		// If not set, obtain currently logged-in user
+		currentUser, err := user.Current()
+		if err != nil {
+			fmt.Println("Error obtaining current user:", err)
+			os.Exit(1)
+		}
+		crontabUser = currentUser.Username
 	}
 
 	if crontabUser != "" {
@@ -118,6 +118,7 @@ func HandleCommandLineOptions() {
 			fmt.Println("Error parsing crontab:", err)
 			os.Exit(1)
 		}
+
 		// Iterate over cronTasks and call PrepareConfigJson for each task
 		var jsonData string
 		for _, cronTask := range cronTasks {
@@ -136,6 +137,14 @@ func HandleCommandLineOptions() {
 				continue // Skip to the next iteration of the loop
 			}
 			fmt.Println("Heartbeat created successfully:", responseBodyUrl)
+
+			// Append the curl command to the cron task
+			err = crontab.AppendCurlCommand([]crontab.CronTask{cronTask}, crontabUser)
+			if err != nil {
+				fmt.Println("Error appending curl command to cron task:", err)
+				continue // Skip to the next iteration of the loop
+			}
+			fmt.Println("Curl command appended to cron task successfully.")
 		}
 	}
 }
