@@ -118,33 +118,36 @@ func HandleCommandLineOptions() {
 			fmt.Println("Error parsing crontab:", err)
 			os.Exit(1)
 		}
-
+	
 		// Iterate over cronTasks and call PrepareConfigJson for each task
-		var jsonData string
 		for _, cronTask := range cronTasks {
 			data, err := heartbeat.PrepareConfigJson(cronTask.Spec, cronTask.Name)
 			if err != nil {
 				fmt.Println("Error preparing config JSON:", err)
 				continue // Skip to the next iteration of the loop
 			}
-			jsonData = data
-
-			fmt.Println(jsonData)
+	
+			fmt.Println(data)
 			// Create the Heartbeat
-			responseBodyUrl, err := heartbeat_mock.CreateHeartbeat(authToken, data)
+			responseBodyURL, err := heartbeat_mock.CreateHeartbeat(authToken, data)
 			if err != nil {
 				fmt.Println("Error creating heartbeat:", err)
 				continue // Skip to the next iteration of the loop
 			}
-			fmt.Println("Heartbeat created successfully:", responseBodyUrl)
-
-			// Append the curl command to the cron task
-			err = crontab.AppendCurlCommand([]crontab.CronTask{cronTask}, crontabUser)
+			fmt.Println("Heartbeat created successfully:", responseBodyURL)
+	
+			// Append the curl command to the cron tasks
+			var urls []string
+			for _, task := range cronTasks {
+				urls = append(urls, task.HeartbeatURL)
+			}
+	
+			err = crontab.AppendCurlsCommand(urls, crontabUser)
 			if err != nil {
-				fmt.Println("Error appending curl command to cron task:", err)
+				fmt.Println("Error appending curl command to cron tasks:", err)
 				continue // Skip to the next iteration of the loop
 			}
-			fmt.Println("Curl command appended to cron task successfully.")
+			fmt.Println("Curl commands appended to cron tasks successfully.")
 		}
-	}
+	}	
 }
