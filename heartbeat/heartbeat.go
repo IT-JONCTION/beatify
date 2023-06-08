@@ -111,10 +111,10 @@ func CreateHeartbeat(authToken string, jsonData string) (string, error) {
 	}
 
 	// Extract the URL from the response using the utility function
-	url, err := extractURLFromResponse(responseBody)
+	resultURL, err := extractURLFromResponse(responseBody)
 	if err != nil {
 		return "", err
 	}
 
-	return url, nil
+	return resultURL, nil
 }

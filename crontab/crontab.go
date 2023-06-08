@@ -6,7 +6,19 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+	"os/exec"
 )
+
+// Utility function to get the crontab file path for a given user
+func getCrontabFilePath(crontabUser string) (string, error) {
+	// Get the crontab file path
+	crontabFile, err := getCrontabFilePath(crontabUser)
+	_, err := os.Stat(crontabFile)
+	if err != nil {
+		return "", err
+	}
+	return crontabFile, nil
+}
 
 // Function to parse crontab and prompt user for approval
 func ParseAndApproveCronTasks(crontabUser string) ([]CronTask, error) {
@@ -93,4 +105,32 @@ func promptApproval() bool {
 	text, _ := reader.ReadString('\n')
 	text = strings.TrimSpace(text)
 	return strings.ToLower(text) == "y"
+}
+
+// Function to append curl command to crontab tasks
+func AppendCurlCommand(cronTasks []CronTask, crontabUser string) error {
+	// Get the crontab file path
+	crontabFile, err := getCrontabFilePath(crontabUser)
+	if err != nil {
+		return err
+	}
+
+	for _, task := range cronTasks {
+		// Construct the curl command string to append to the task
+		curlCommand := fmt.Sprintf(`curl -s -o /dev/null -w "%%{http_code}" %s`, task.URL)
+
+		// Use sed to append the curl command to the task
+		cmd := exec.Command("sed", "-i", fmt.Sprintf(`$s#$# && %s#`, curlCommand), crontabFile)
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to append curl command to task: %w", err)
+		}
+	}
+
+	// Reload the cron system to apply the changes
+	reloadCmd := exec.Command("systemctl", "reload", "cron")
+	if err := reloadCmd.Run(); err != nil {
+		return fmt.Errorf("failed to reload cron system: %w", err)
+	}
+
+	return nil
 }
