@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
-	"github.com/IT-JONCTION/beatify/heartbeat"
 )
 
 // Function to parse crontab and prompt user for approval
@@ -53,9 +52,9 @@ func ParseAndApproveCronTasks(crontabUser string) ([]CronTask, error) {
 			task := strings.Join(fields[5:], " ")
 
 			approvedCronTasks = append(approvedCronTasks, CronTask{
-				spec: spec,
-				task: task,
-				name: name,
+				Spec: spec,
+				Task: task,
+				Name: name,
 			})
 		}
 	}
@@ -82,9 +81,9 @@ func promptHeartbeatName() (string, error) {
 }
 
 type CronTask struct {
-	spec string
-	task string
-	name string
+	Spec string
+	Task string
+	Name string
 }
 
 // Function to prompt the user for approval

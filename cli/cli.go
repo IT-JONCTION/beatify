@@ -7,6 +7,7 @@ import (
 	"os/user"
 	"github.com/IT-JONCTION/beatify/config"
 	"github.com/IT-JONCTION/beatify/crontab"
+	"github.com/IT-JONCTION/beatify/heartbeat"
 )
 
 var (
@@ -116,7 +117,18 @@ func HandleCommandLineOptions() {
 			fmt.Println("Error parsing crontab:", err)
 			os.Exit(1)
 		}
-		_ = cronTasks // Suppress the "declared and not used" warning
+		// Iterate over cronTasks and call PrepareConfigJson for each task
+		var jsonData string
+		for _, cronTask := range cronTasks {
+			data, err := heartbeat.PrepareConfigJson(cronTask.Spec, cronTask.Name)
+			if err != nil {
+				fmt.Println("Error preparing config JSON:", err)
+				return
+			}
+			jsonData = data
+
+			fmt.Println(jsonData)
+		}
 	}
 
 	// Rest of your CLI tool logic...
