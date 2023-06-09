@@ -7,12 +7,13 @@ import (
 	"os"
 	"strings"
 	"os/exec"
+	"net/url"
 )
 
 // Utility function to get the crontab file path for a given user
 func getCrontabFilePath(crontabUser string) (string, error) {
 	// Get the crontab file path
-	crontabFile, err := getCrontabFilePath(crontabUser)
+	crontabFile := "/var/spool/cron/crontabs/" + crontabUser
 	_, err := os.Stat(crontabFile)
 	if err != nil {
 		return "", err
@@ -23,7 +24,13 @@ func getCrontabFilePath(crontabUser string) (string, error) {
 // Function to parse crontab and prompt user for approval
 func ParseAndApproveCronTasks(crontabUser string) ([]CronTask, error) {
 	// Read the crontab file
-	data, err := ioutil.ReadFile("/var/spool/cron/crontabs/" + crontabUser)
+	crontabFile, err := getCrontabFilePath(crontabUser)
+	if err != nil {
+		return nil, err
+	}
+
+	// Read the crontab file
+	data, err := ioutil.ReadFile(crontabFile)
 	if err != nil {
 		return nil, err
 	}
@@ -39,8 +46,8 @@ func ParseAndApproveCronTasks(crontabUser string) ([]CronTask, error) {
 			continue
 		}
 
-		// If cron task contains "uptime.betterstack.com", skip and inform user
-		if strings.Contains(line, "uptime.betterstack.com") {
+		// If cron task contains "uptime.betterstack", skip and inform user
+		if strings.Contains(line, "uptime.betterstack") {
 			fmt.Println("Skipping cron task containing 'uptime.betterstack.com':", line)
 			continue
 		}
@@ -109,29 +116,70 @@ func promptApproval() bool {
 }
 
 // Function to append curl command to crontab tasks
-func AppendCurlsCommand(urls []string, crontabUser string) error {
+func AppendCronsCommand(cronTasks []CronTask, crontabUser string) error {
+
 	// Get the crontab file path
 	crontabFile, err := getCrontabFilePath(crontabUser)
 	if err != nil {
 		return err
 	}
 
-	for _, url := range urls {
-		// Construct the curl command string to append to the task
-		curlCommand := fmt.Sprintf(`curl -s -o /dev/null -w "%%{http_code}" %s`, url)
-
-		// Use sed to append the curl command to the task
-		cmd := exec.Command("sed", "-i", fmt.Sprintf(`$s#$# && %s#`, curlCommand), crontabFile)
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to append curl command to task: %w", err)
+	// Loop through the cron tasks
+	for _, cronTask := range cronTasks {
+		// Check if HeartbeatURL is set and is a correctly formatted URL
+		if _, err := url.ParseRequestURI(cronTask.HeartbeatURL); err != nil {
+			fmt.Printf("Invalid HeartbeatURL in task '%s', skipping this task.\n", cronTask.Task)
+			continue
 		}
+
+		// Construct the curl command string to append to the task
+		curlCommand := fmt.Sprintf(`curl -s -o /dev/null -w "%%{http_code}" %s`, cronTask.HeartbeatURL)
+
+		// Read the crontab file
+		file, err := os.Open(crontabFile)
+		if err != nil {
+			return fmt.Errorf("failed to open crontab file: %w", err)
+		}
+		defer file.Close()
+
+		scanner := bufio.NewScanner(file)
+		var updatedLines []string
+
+		// Construct the task spec string
+		taskSpec := cronTask.Spec + " " + cronTask.Task
+
+		// Iterate over each line in the crontab file
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			// Check if the line matches the cron task
+			if strings.Contains(line, taskSpec) {
+				// Append the curl command to the task
+				line += " && " + curlCommand
+			}
+
+			updatedLines = append(updatedLines, line)
+		}
+
+		if scanner.Err() != nil {
+			return fmt.Errorf("error reading crontab file: %w", scanner.Err())
+		}
+
+		// Write the updated lines back to the crontab file
+		err = ioutil.WriteFile(crontabFile, []byte(strings.Join(updatedLines, "\n")), 0644)
+		if err != nil {
+			return fmt.Errorf("failed to write updated crontab file: %w", err)
+		}
+
+		fmt.Printf("Curl command appended to cron task '%s' successfully.\n", cronTask.Task)
 	}
 
 	// Reload the cron system to apply the changes
-	reloadCmd := exec.Command("systemctl", "reload", "cron")
+	reloadCmd := exec.Command("service", "cron", "reload")
 	if err := reloadCmd.Run(); err != nil {
 		return fmt.Errorf("failed to reload cron system: %w", err)
 	}
 
+	fmt.Println("Cron system reloaded successfully.")
 	return nil
 }

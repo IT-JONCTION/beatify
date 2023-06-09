@@ -1,4 +1,4 @@
-FROM golang:latest
+FROM golang:bullseye
 
 # Install cron and other necessary dependencies
 RUN apt-get update && apt-get install -y cron
