@@ -3,6 +3,7 @@ package crontab
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -50,7 +51,8 @@ func readCrontabFile(crontabFile string) ([]string, error) {
 func updateCronTask(cronTask CronTask, lines []string) ([]string, error) {
 	// Check if HeartbeatURL is set and is a correctly formatted URL
 	if _, err := url.ParseRequestURI(cronTask.HeartbeatURL); err != nil {
-		return nil, fmt.Errorf("Invalid HeartbeatURL in task '%s', skipping this task.\n", cronTask.Task)
+		fmt.Printf("Invalid HeartbeatURL in task '%s', skipping this task.\n", cronTask.Task)
+		return lines, nil
 	}
 
 	// Construct the curl command string to append to the task
@@ -193,10 +195,18 @@ func promptApproval() bool {
 
 // Function to append curl command to crontab tasks
 func AppendCronsCommand(cronTasks []CronTask, crontabUser string) error {
+
 	// Get the crontab file path
 	crontabFile, err := getCrontabFilePath(crontabUser)
 	if err != nil {
 		return err
+	}
+
+	// Create a backup of the crontab file
+	backupFile := crontabFile + ".bak"
+	err = backupCrontabFile(crontabFile, backupFile)
+	if err != nil {
+		return fmt.Errorf("failed to backup crontab file: %w", err)
 	}
 
 	// Read the crontab file
@@ -208,19 +218,16 @@ func AppendCronsCommand(cronTasks []CronTask, crontabUser string) error {
 	// Loop through the cron tasks
 	for _, cronTask := range cronTasks {
 		// Update the cron task
-		updatedLines, err := updateCronTask(cronTask, lines)
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
-
-		// Write the updated lines back to the crontab file
-		err = writeCronTasksToFile(crontabFile, updatedLines)
+		lines, err = updateCronTask(cronTask, lines)
 		if err != nil {
 			return err
 		}
+	}
 
-		fmt.Printf("Curl command appended to cron task '%s' successfully.\n", cronTask.Task)
+	// Write the updated lines back to the crontab file
+	err = writeCronTasksToFile(crontabFile, lines)
+	if err != nil {
+		return err
 	}
 
 	// Reload the cron system
@@ -228,6 +235,27 @@ func AppendCronsCommand(cronTasks []CronTask, crontabUser string) error {
 	if err != nil {
 		return err
 	}
-
 	return nil
+}
+
+// Function to copy a file (for creating backups)
+func backupCrontabFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, in)
+	if err != nil {
+		return err
+	}
+
+	return out.Close()
 }

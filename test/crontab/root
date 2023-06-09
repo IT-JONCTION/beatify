@@ -3,4 +3,4 @@
 * 0 * * * echo "This is a dont test cron job" >> /var/log/test-cron.log 2>&1
 * * 0 * * echo "This is a do test cron job" >> /var/log/test-cron.log 2>&1
 * * * 0 * echo "This is a dont test cron job" >> /var/log/test-cron.log 2>&1
-* * * * 0 echo "This is a do test cron job" >> /var/log/test-cron.log 2>&1 && curl -s -o /dev/null -w "%{http_code}" https://uptime.betterstack.fake.com/heartbeat/5e879a688a9bb62f4f48
+* * * * 0 echo "This is a do test cron job" >> /var/log/test-cron.log 2>&1
