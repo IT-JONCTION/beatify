@@ -8,7 +8,6 @@ import (
 	"github.com/IT-JONCTION/beatify/config"
 	"github.com/IT-JONCTION/beatify/crontab"
 	"github.com/IT-JONCTION/beatify/heartbeat"
-	"github.com/IT-JONCTION/beatify/heartbeat_mock"
 )
 
 var (
@@ -128,7 +127,7 @@ func HandleCommandLineOptions() {
 			}
 
 			// Create the Heartbeat
-			responseBodyURL, err := heartbeat_mock.CreateHeartbeat(authToken, data)
+			responseBodyURL, err := heartbeat.CreateHeartbeat(authToken, data)
 			if err != nil {
 					fmt.Println("Error creating heartbeat:", err)
 					continue // Skip to the next iteration of the loop
