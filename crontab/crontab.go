@@ -109,16 +109,16 @@ func promptApproval() bool {
 }
 
 // Function to append curl command to crontab tasks
-func AppendCurlCommand(cronTasks []CronTask, crontabUser string) error {
+func AppendCurlsCommand(urls []string, crontabUser string) error {
 	// Get the crontab file path
 	crontabFile, err := getCrontabFilePath(crontabUser)
 	if err != nil {
 		return err
 	}
 
-	for _, task := range cronTasks {
+	for _, url := range urls {
 		// Construct the curl command string to append to the task
-		curlCommand := fmt.Sprintf(`curl -s -o /dev/null -w "%%{http_code}" %s`, task.URL)
+		curlCommand := fmt.Sprintf(`curl -s -o /dev/null -w "%%{http_code}" %s`, url)
 
 		// Use sed to append the curl command to the task
 		cmd := exec.Command("sed", "-i", fmt.Sprintf(`$s#$# && %s#`, curlCommand), crontabFile)
