@@ -101,7 +101,7 @@ func CreateHeartbeat(authToken string, jsonData string) (string, error) {
 	defer resp.Body.Close()
 
 	// Check the response status code
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusCreated {
 		return "", fmt.Errorf("Unexpected response status: %s", resp.Status)
 	}
 
