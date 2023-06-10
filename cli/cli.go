@@ -103,13 +103,10 @@ func HandleCommandLineOptions() {
 	// Check if heartbeatGroup is set
 	if heartbeatGroupID != "" {
 		// Get the ID of the heartbeat group if it exists
-		heartbeatGroupID, err := heartbeat.GetHeartbeatGroupID(authToken, heartbeatGroupID)
-		if err != nil {
-				fmt.Println("Error getting heartbeat group ID:", err)
-				os.Exit(1)
-		}
+		heartbeatGroupID = heartbeat.GetHeartbeatGroupID(authToken, heartbeatGroupID)
 		if heartbeatGroupID == "" {
 				// If heartbeatGroup does not exist, create it
+				var err error
 				heartbeatGroupID, err = heartbeat.CreateHeartbeatGroup(authToken, heartbeatGroupID)
 				if err != nil {
 						fmt.Println("Error creating heartbeat group:", err)
@@ -117,7 +114,6 @@ func HandleCommandLineOptions() {
 				}
 		}
 	}
-
 
 	// Check if crontabUser option is set
 	if crontabUser == "" {
