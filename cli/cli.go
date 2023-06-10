@@ -34,9 +34,9 @@ DESCRIPTION
     crontab to append a curl request to each approved cron task.
 
 OPTIONS
-		-a, --auth-token AUTH_TOKEN
-				Provide the authentication token for the BetterUptime API. If not
-				provided, the tool will prompt for it during runtime.
+    -a, --auth-token AUTH_TOKEN
+        Provide the authentication token for the BetterUptime API. If not
+        provided, the tool will prompt for it during runtime.
 
     -u, --user USER
         Optional. The crontab user to edit. If not provided, the tool will
