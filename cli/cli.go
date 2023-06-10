@@ -8,6 +8,8 @@ import (
 	"github.com/IT-JONCTION/beatify/config"
 	"github.com/IT-JONCTION/beatify/crontab"
 	"github.com/IT-JONCTION/beatify/heartbeat"
+	"golang.org/x/time/rate"
+	"time"
 )
 
 var (
@@ -71,7 +73,6 @@ SEE ALSO
     The BetterUptime API documentation: https://docs.betteruptime.com/api/
 `
 
-
 func init() {
 	// Define command-line flags
 	pflag.StringVarP(&authToken, "auth-token", "a", "", "Authentication token for the BetterUptime API")
@@ -133,9 +134,21 @@ func HandleCommandLineOptions() {
 			fmt.Println("Error parsing crontab:", err)
 			os.Exit(1)
 		}
+
+		limiter := rate.NewLimiter(3, 1) // 3 requests per second, no burst
 	
 		// Iterate over cronTasks and call PrepareConfigJson for each task
 		for i, cronTask := range cronTasks {
+
+			ctx := limiter.ReserveN(time.Now(), 1)
+			if !ctx.OK() {
+				fmt.Println("Waiting for API.")
+				return
+			}
+		
+			delay := ctx.Delay()
+			time.Sleep(delay)
+
 			data, err := heartbeat.PrepareConfigJson(cronTask.Spec, cronTask.Name, heartbeatGroupID)
 			if err != nil {
 					fmt.Println("Error preparing config JSON:", err)
