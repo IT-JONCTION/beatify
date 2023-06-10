@@ -56,7 +56,7 @@ func updateCronTask(cronTask CronTask, lines []string) ([]string, error) {
 	}
 
 	// Construct the curl command string to append to the task
-	curlCommand := fmt.Sprintf(`curl -s -o /dev/null -w "%%{http_code}" %s`, cronTask.HeartbeatURL)
+	curlCommand := fmt.Sprintf(`curl -fs --retry 3 %s > /dev/null 2>&1`, cronTask.HeartbeatURL)
 
 	// Construct the task spec string
 	taskSpec := cronTask.Spec + " " + cronTask.Task

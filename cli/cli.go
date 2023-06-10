@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"flag"
+	"github.com/spf13/pflag"
 	"fmt"
 	"os"
 	"os/user"
@@ -14,6 +14,7 @@ var (
 	authToken   string
 	crontabUser string
 	showHelp    bool
+	heartbeatGroupID string
 )
 
 var manpageTemplate = `
@@ -33,9 +34,9 @@ DESCRIPTION
     crontab to append a curl request to each approved cron task.
 
 OPTIONS
-    -a, --auth-token AUTH_TOKEN
-        Optional. The authentication token for the BetterUptime API. If not
-        provided, the tool will prompt for it during runtime.
+		-a, --auth-token AUTH_TOKEN
+				Provide the authentication token for the BetterUptime API. If not
+				provided, the tool will prompt for it during runtime.
 
     -u, --user USER
         Optional. The crontab user to edit. If not provided, the tool will
@@ -43,6 +44,10 @@ OPTIONS
 
     -h, --help
         Display the help message and exit.
+
+    -g, --heartbeat-group HEARTBEAT_GROUP
+        Optional. The heartbeat group to add the heartbeat to. If not provided,
+        the tool will default to creating the heartbeats without a group.
 
 EXAMPLES
     To run Beatify and create heartbeats for cron tasks:
@@ -69,27 +74,23 @@ SEE ALSO
 
 func init() {
 	// Define command-line flags
-	flag.StringVar(&authToken, "a", "", "Authentication token for the BetterUptime API")
-	flag.StringVar(&authToken, "auth-token", "", "Authentication token for the BetterUptime API (shorthand)")
-
-	flag.StringVar(&crontabUser, "u", "", "Crontab user to edit")
-	flag.StringVar(&crontabUser, "user", "", "Crontab user to edit (shorthand)")
-
-	flag.BoolVar(&showHelp, "h", false, "Show help message")
-	flag.BoolVar(&showHelp, "help", false, "Show help message (shorthand)")
+	pflag.StringVarP(&authToken, "auth-token", "a", "", "Authentication token for the BetterUptime API")
+	pflag.StringVarP(&crontabUser, "user", "u", "", "Crontab user to edit")
+	pflag.StringVarP(&heartbeatGroupID, "heartbeat-group", "g", "", "Heartbeat group to add the heartbeat to")
+	pflag.BoolVarP(&showHelp, "help", "h", false, "Show help message")
 
 	// Customize usage message
-	flag.Usage = func() {
+	pflag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "%s\n", manpageTemplate)
 	}
 }
 
 func HandleCommandLineOptions() {
-	flag.Parse()
+	pflag.Parse()
 
 	if showHelp {
 		// Display the help message and exit
-		flag.Usage()
+		pflag.Usage()
 		os.Exit(0)
 	}
 
@@ -98,6 +99,25 @@ func HandleCommandLineOptions() {
 		// Prompt the user to enter the authToken
 		authToken = config.PromptAuthToken()
 	}
+
+	// Check if heartbeatGroup is set
+	if heartbeatGroupID != "" {
+		// Get the ID of the heartbeat group if it exists
+		heartbeatGroupID, err := heartbeat.GetHeartbeatGroupID(authToken, heartbeatGroupID)
+		if err != nil {
+				fmt.Println("Error getting heartbeat group ID:", err)
+				os.Exit(1)
+		}
+		if heartbeatGroupID == "" {
+				// If heartbeatGroup does not exist, create it
+				heartbeatGroupID, err = heartbeat.CreateHeartbeatGroup(authToken, heartbeatGroupID)
+				if err != nil {
+						fmt.Println("Error creating heartbeat group:", err)
+						os.Exit(1)
+				}
+		}
+	}
+
 
 	// Check if crontabUser option is set
 	if crontabUser == "" {
@@ -120,7 +140,7 @@ func HandleCommandLineOptions() {
 	
 		// Iterate over cronTasks and call PrepareConfigJson for each task
 		for i, cronTask := range cronTasks {
-			data, err := heartbeat.PrepareConfigJson(cronTask.Spec, cronTask.Name)
+			data, err := heartbeat.PrepareConfigJson(cronTask.Spec, cronTask.Name, heartbeatGroupID)
 			if err != nil {
 					fmt.Println("Error preparing config JSON:", err)
 					continue // Skip to the next iteration of the loop
