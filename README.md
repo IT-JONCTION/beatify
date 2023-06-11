@@ -31,7 +31,7 @@ Report bugs to the GitHub repository: [https://github.com/IT-JONCTION/beatify](h
 
 ## Author
 
-Your Name <wayne@it-jonction-lab.com>
+Wayne Theisinger <wayne@it-jonction-lab.com>
 
 ## Copyright
 
