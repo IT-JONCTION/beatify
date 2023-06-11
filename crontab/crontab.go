@@ -87,18 +87,6 @@ func writeCronTasksToFile(crontabFile string, updatedLines []string) error {
 	return nil
 }
 
-// helper function to reload cron system
-func reloadCronSystem() error {
-	// Reload the cron system to apply the changes
-	reloadCmd := exec.Command("service", "cron", "reload")
-	if err := reloadCmd.Run(); err != nil {
-		return fmt.Errorf("failed to reload cron system: %w", err)
-	}
-
-	fmt.Println("Cron system reloaded successfully.")
-	return nil
-}
-
 // Function to parse crontab and prompt user for approval
 func ParseAndApproveCronTasks(crontabUser string) ([]CronTask, error) {
 	// Read the crontab file
@@ -211,22 +199,16 @@ func promptApproval() (bool, bool) {
 
 // Function to append curl command to crontab tasks
 func AppendCronsCommand(cronTasks []CronTask, crontabUser string) error {
+	tempFile := "temp_crontab"
 
-	// Get the crontab file path
-	crontabFile, err := getCrontabFilePath(crontabUser)
-	if err != nil {
-		return err
+	// Dump current crontab into a temp file
+	cmd := exec.Command("sh", "-c", fmt.Sprintf("crontab -l > %s", tempFile))
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to dump current crontab: %w", err)
 	}
 
-	// Create a backup of the crontab file
-	backupFile := crontabFile + ".bak"
-	err = backupCrontabFile(crontabFile, backupFile)
-	if err != nil {
-		return fmt.Errorf("failed to backup crontab file: %w", err)
-	}
-
-	// Read the crontab file
-	lines, err := readCrontabFile(crontabFile)
+	// Read the temp crontab file
+	lines, err := readCrontabFile(tempFile)
 	if err != nil {
 		return err
 	}
@@ -240,17 +222,24 @@ func AppendCronsCommand(cronTasks []CronTask, crontabUser string) error {
 		}
 	}
 
-	// Write the updated lines back to the crontab file
-	err = writeCronTasksToFile(crontabFile, lines)
+	// Write the updated lines back to the temp file
+	err = writeCronTasksToFile(tempFile, lines)
 	if err != nil {
 		return err
 	}
 
-	// Reload the cron system
-	err = reloadCronSystem()
-	if err != nil {
-		return err
+	// Replace current user's crontab with temp file
+	cmd = exec.Command("crontab", tempFile)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to replace crontab with temp file: %w", err)
 	}
+
+	// Cleanup: Delete the temporary file
+	if err := os.Remove(tempFile); err != nil {
+		return fmt.Errorf("failed to remove temporary file: %w", err)
+	}
+
+	fmt.Println("Cron tasks updated successfully.")
 	return nil
 }
 
