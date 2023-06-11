@@ -123,37 +123,43 @@ func ParseAndApproveCronTasks(crontabUser string) ([]CronTask, error) {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-
+	
 		// If cron task contains "uptime.betterstack", skip and inform user
 		if strings.Contains(line, "uptime.betterstack") {
 			fmt.Println("Skipping cron task containing 'uptime.betterstack.com':", line)
 			continue
 		}
-
+	
 		// Display the cron task and ask for approval
 		fmt.Println("Cron task:", line)
-		if promptApproval() {
-			// Prompt the user to enter the name for the heartbeat
-			name, err := promptHeartbeatName()
-			if err != nil {
-				return nil, err
-			}
-
-			fields := strings.Fields(line)
-			if len(fields) < 6 {
-				fmt.Println("Skipping invalid cron task:", line)
-				continue
-			}
-
-			spec := strings.Join(fields[:5], " ")
-			task := strings.Join(fields[5:], " ")
-
-			approvedCronTasks = append(approvedCronTasks, CronTask{
-				Spec: spec,
-				Task: task,
-				Name: name,
-			})
+		isApproved, exitLoop := promptApproval()
+		if exitLoop {
+			break
 		}
+		if !isApproved {
+			continue
+		}
+	
+		// Prompt the user to enter the name for the heartbeat
+		name, err := promptHeartbeatName()
+		if err != nil {
+			return nil, err
+		}
+	
+		fields := strings.Fields(line)
+		if len(fields) < 6 {
+			fmt.Println("Skipping invalid cron task:", line)
+			continue
+		}
+	
+		spec := strings.Join(fields[:5], " ")
+		task := strings.Join(fields[5:], " ")
+	
+		approvedCronTasks = append(approvedCronTasks, CronTask{
+			Spec: spec,
+			Task: task,
+			Name: name,
+		})
 	}
 
 	return approvedCronTasks, nil
@@ -185,12 +191,22 @@ type CronTask struct {
 }
 
 // Function to prompt the user for approval
-func promptApproval() bool {
+func promptApproval() (bool, bool) {
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Approve this cron task? (y/n): ")
+	fmt.Print("Continue? (n skips this cron, N skips the rest of the crons) (y/n/N): ")
 	text, _ := reader.ReadString('\n')
-	text = strings.TrimSpace(text)
-	return strings.ToLower(text) == "y"
+	text = strings.TrimSpace(strings.ToLower(text))
+
+	switch text {
+	case "y":
+		return true, false
+	case "n":
+		return false, false
+	case "N":
+		return false, true
+	default:
+		return false, false
+	}
 }
 
 // Function to append curl command to crontab tasks
