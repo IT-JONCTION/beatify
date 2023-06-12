@@ -3,31 +3,52 @@ package crontab
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"strings"
 	"os/exec"
 	"net/url"
+	"regexp"
 )
 
-// Utility function to get the crontab file path for a given user
-func getCrontabFilePath(crontabUser string) (string, error) {
-	// Get the crontab file path
-	crontabFile := "/var/spool/cron/crontabs/" + crontabUser
-	_, err := os.Stat(crontabFile)
-	if err != nil {
-		return "", err
-	}
-	return crontabFile, nil
+type CronTask struct {
+	Spec string
+	Task string
+	Name string
+	HeartbeatURL string
 }
 
-// helper function to read crontab file
-func readCrontabFile(crontabFile string) ([]string, error) {
-	// Read the crontab file
-	file, err := os.Open(crontabFile)
+// Constants for temp and backup file prefixes
+const (
+	TempFilePrefix   = "crontab"
+	BackupFilePrefix = "crontab_backup"
+)
+
+// Package-level variables for the temp and backup files
+var (
+	TempFile   *os.File
+	BackupFile *os.File
+)
+
+func IsValidUsername(username string) error {
+	r := regexp.MustCompile(`^[a-zA-Z0-9_-]{3,16}$`)
+	if !r.MatchString(username) {
+		return fmt.Errorf("invalid username '%s': a valid username is 3-16 characters long and consists of alphanumeric characters, underscores, or dashes", username)
+	}
+	return nil
+}
+
+// Helper function to read crontab file
+func readCrontabFile() ([]string, error) {
+	// Ensure TempFile is not nil
+	if TempFile == nil {
+		return nil, fmt.Errorf("temp file has not been created yet")
+	}
+
+	// Open the temp crontab file
+	file, err := os.Open(TempFile.Name())
 	if err != nil {
-		return nil, fmt.Errorf("failed to open crontab file: %w", err)
+		return nil, fmt.Errorf("failed to open temp crontab file: %w", err)
 	}
 	defer file.Close()
 
@@ -41,7 +62,7 @@ func readCrontabFile(crontabFile string) ([]string, error) {
 	}
 
 	if scanner.Err() != nil {
-		return nil, fmt.Errorf("error reading crontab file: %w", scanner.Err())
+		return nil, fmt.Errorf("error reading temp crontab file: %w", scanner.Err())
 	}
 
 	return lines, nil
@@ -49,10 +70,14 @@ func readCrontabFile(crontabFile string) ([]string, error) {
 
 // helper function to update a cron task
 func updateCronTask(cronTask CronTask, lines []string) ([]string, error) {
+	// Check if Spec, Task, and Name fields of the cronTask are not empty
+	if cronTask.Spec == "" || cronTask.Task == "" || cronTask.Name == "" {
+		return nil, fmt.Errorf("invalid CronTask, 'Spec', 'Task' or 'Name' field is empty")
+	}
+
 	// Check if HeartbeatURL is set and is a correctly formatted URL
 	if _, err := url.ParseRequestURI(cronTask.HeartbeatURL); err != nil {
-		fmt.Printf("Invalid HeartbeatURL in task '%s', skipping this task.\n", cronTask.Task)
-		return lines, nil
+		return nil, fmt.Errorf("invalid HeartbeatURL in task '%s': %w", cronTask.Task, err)
 	}
 
 	// Construct the curl command string to append to the task
@@ -66,8 +91,13 @@ func updateCronTask(cronTask CronTask, lines []string) ([]string, error) {
 	// Check if the line matches the cron task
 	for _, line := range lines {
 		if strings.Contains(line, taskSpec) {
-			// Append the curl command to the task
-			line += " && " + curlCommand
+			// Check if the curl command is already appended to the task
+			if !strings.Contains(line, curlCommand) {
+				// Append the curl command to the task
+				line += " && " + curlCommand
+			} else {
+				return nil, fmt.Errorf("curl command is already appended to task '%s'", cronTask.Task)
+			}
 		}
 
 		updatedLines = append(updatedLines, line)
@@ -89,20 +119,18 @@ func writeCronTasksToFile(crontabFile string, updatedLines []string) error {
 
 // Function to parse crontab and prompt user for approval
 func ParseAndApproveCronTasks(crontabUser string) ([]CronTask, error) {
-	// Read the crontab file
-	crontabFile, err := getCrontabFilePath(crontabUser)
+
+	// Prepare the temp and backup crontab files
+	err := PrepareCrontabFiles(crontabUser)
 	if err != nil {
 		return nil, err
 	}
 
-	// Read the crontab file
-	data, err := ioutil.ReadFile(crontabFile)
+	// Read the temp crontab file
+	lines, err := readCrontabFile()
 	if err != nil {
 		return nil, err
 	}
-
-	// Split file content into lines
-	lines := strings.Split(string(data), "\n")
 
 	approvedCronTasks := []CronTask{}
 
@@ -120,12 +148,15 @@ func ParseAndApproveCronTasks(crontabUser string) ([]CronTask, error) {
 	
 		// Display the cron task and ask for approval
 		fmt.Println("Cron task:", line)
-		isApproved, exitLoop := promptApproval()
+		isApproved, exitLoop, err := promptApproval()
+		if err != nil {
+				return nil, fmt.Errorf("failed to get approval: %w", err)
+		}
 		if exitLoop {
-			break
+				break
 		}
 		if !isApproved {
-			continue
+				continue
 		}
 	
 		// Prompt the user to enter the name for the heartbeat
@@ -158,57 +189,121 @@ func promptHeartbeatName() (string, error) {
 	fmt.Print("Enter the name for the heartbeat: ")
 	name, err := reader.ReadString('\n')
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to read input for heartbeat name: %w", err)
 	}
 
 	name = strings.TrimSpace(name)
 
 	// Perform basic validation to prevent command injection
 	if strings.ContainsAny(name, `";$|><&`) {
-		return "", fmt.Errorf("Invalid heartbeat name")
+		return "", fmt.Errorf("heartbeat name contains invalid characters: %s", name)
 	}
 
 	return name, nil
 }
 
-type CronTask struct {
-	Spec string
-	Task string
-	Name string
-	HeartbeatURL string
-}
-
-// Function to prompt the user for approval
-func promptApproval() (bool, bool) {
+func promptApproval() (bool, bool, error) {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Print("Continue? (n skips this cron, N skips the rest of the crons) (y/n/N): ")
-	text, _ := reader.ReadString('\n')
+	text, err := reader.ReadString('\n')
+	if err != nil {
+		return false, false, fmt.Errorf("error reading input: %w", err)
+	}
 	text = strings.TrimSpace(strings.ToLower(text))
 
 	switch text {
 	case "y":
-		return true, false
+		return true, false, nil
 	case "n":
-		return false, false
+		return false, false, nil
 	case "N":
-		return false, true
+		return false, true, nil
 	default:
-		return false, false
+		return false, false, nil
 	}
+}
+
+// Lower-level utility function to dump the crontab to a specified file
+func DumpCrontabToFile(crontabUser, fileType string) error {
+	if err := IsValidUsername(crontabUser); err != nil {
+		return err
+	}
+	var err error
+	var cmd *exec.Cmd
+	var filePath string
+
+	// Determine file type and create file accordingly
+	switch fileType {
+	case "temp":
+		if TempFile == nil {
+			TempFile, err = ioutil.TempFile("", TempFilePrefix)
+			if err != nil {
+				return fmt.Errorf("failed to create temp file: %w", err)
+			}
+			filePath = TempFile.Name()
+		}
+	case "backup":
+		// Use the user's home directory to store backup file
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("failed to get user home directory: %w", err)
+		}
+		backupFilePath := fmt.Sprintf("%s/%s.bak", homeDir, BackupFilePrefix)
+		BackupFile, err = os.OpenFile(backupFilePath, os.O_RDWR|os.O_CREATE, 0666)
+		if err != nil {
+			return fmt.Errorf("failed to open or create backup file: %w", err)
+		}
+		filePath = BackupFile.Name()
+	}
+
+	// Check if crontabUser is supplied
+	if crontabUser != "" {
+		// Dump crontab for specific user to specified file
+		cmd = exec.Command("sh", "-c", fmt.Sprintf("crontab -u %s -l > %s", crontabUser, filePath))
+	} else {
+		// Dump crontab to specified file
+		cmd = exec.Command("sh", "-c", fmt.Sprintf("crontab -l > %s", filePath))
+	}
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to dump crontab to %s: %w", filePath, err)
+	}
+
+	return nil
+}
+
+// Higher-level utility function to prepare the temporary and backup files
+func PrepareCrontabFiles(crontabUser string) error {
+	if err := IsValidUsername(crontabUser); err != nil {
+		return err
+	}
+	// Dump crontab to temp file
+	if err := DumpCrontabToFile(crontabUser, "temp"); err != nil {
+		return err
+	}
+
+	// Backup crontab
+	if err := DumpCrontabToFile(crontabUser, "backup"); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Function to append curl command to crontab tasks
 func AppendCronsCommand(cronTasks []CronTask, crontabUser string) error {
-	tempFile := "temp_crontab"
 
-	// Dump current crontab into a temp file
-	cmd := exec.Command("sh", "-c", fmt.Sprintf("crontab -l > %s", tempFile))
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to dump current crontab: %w", err)
+	if err := IsValidUsername(crontabUser); err != nil {
+		return err
+	}
+
+  // Prepare the temporary and backup crontab files
+  if err := PrepareCrontabFiles(crontabUser); err != nil {
+		return err
 	}
 
 	// Read the temp crontab file
-	lines, err := readCrontabFile(tempFile)
+	lines, err := readCrontabFile()
 	if err != nil {
 		return err
 	}
@@ -223,44 +318,43 @@ func AppendCronsCommand(cronTasks []CronTask, crontabUser string) error {
 	}
 
 	// Write the updated lines back to the temp file
-	err = writeCronTasksToFile(tempFile, lines)
+	err = writeCronTasksToFile(TempFile.Name(), lines)
 	if err != nil {
 		return err
 	}
 
-	// Replace current user's crontab with temp file
-	cmd = exec.Command("crontab", tempFile)
+	err = reloadCrontab(TempFile.Name(), crontabUser)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Function to load reload crontab from a file
+func reloadCrontab(fileName, crontabUser string) error {
+	if err := IsValidUsername(crontabUser); err != nil {
+		return err
+	}
+	var cmd *exec.Cmd
+	// Check if crontabUser is supplied
+	if crontabUser != "" {
+		// Load crontab from specified file for specific user
+		cmd = exec.Command("sh", "-c", fmt.Sprintf("crontab -u %s %s", crontabUser, fileName))
+	} else {
+		// Load crontab from specified file
+		cmd = exec.Command("sh", "-c", fmt.Sprintf("crontab %s", fileName))
+	}
+
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to replace crontab with temp file: %w", err)
+		return fmt.Errorf("failed to load crontab from %s: %w", fileName, err)
 	}
 
 	// Cleanup: Delete the temporary file
-	if err := os.Remove(tempFile); err != nil {
+	if err := os.Remove(fileName); err != nil {
 		return fmt.Errorf("failed to remove temporary file: %w", err)
 	}
 
 	fmt.Println("Cron tasks updated successfully.")
+
 	return nil
-}
-
-// Function to copy a file (for creating backups)
-func backupCrontabFile(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, in)
-	if err != nil {
-		return err
-	}
-
-	return out.Close()
 }

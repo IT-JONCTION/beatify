@@ -127,6 +127,13 @@ func HandleCommandLineOptions() {
 		crontabUser = currentUser.Username
 	}
 
+	// check if crontabUser is valid
+	if err := crontab.IsValidUsername(crontabUser); err != nil {
+		// Handle the error: show a user-friendly message, log the error, etc.
+		fmt.Println(err)
+		return
+	}
+
 	if crontabUser != "" {
 		// Parse and approve cron tasks
 		cronTasks, err := crontab.ParseAndApproveCronTasks(crontabUser)
