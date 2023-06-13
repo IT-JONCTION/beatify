@@ -1,22 +1,23 @@
 package cli
 
 import (
-	"github.com/spf13/pflag"
 	"fmt"
 	"os"
 	"os/user"
+	"time"
+
 	"github.com/IT-JONCTION/beatify/config"
 	"github.com/IT-JONCTION/beatify/crontab"
-	"github.com/IT-JONCTION/beatify/heartbeat_mock"
 	"github.com/IT-JONCTION/beatify/heartbeat"
+	"github.com/IT-JONCTION/beatify/heartbeat_mock"
+	"github.com/spf13/pflag"
 	"golang.org/x/time/rate"
-	"time"
 )
 
 var (
-	authToken   string
-	crontabUser string
-	showHelp    bool
+	authToken        string
+	crontabUser      string
+	showHelp         bool
 	heartbeatGroupID string
 )
 
@@ -107,13 +108,13 @@ func HandleCommandLineOptions() {
 		// Get the ID of the heartbeat group if it exists
 		heartbeatGroupID = heartbeat_mock.GetHeartbeatGroupID(authToken, heartbeatGroupID)
 		if heartbeatGroupID == "" {
-				// If heartbeatGroup does not exist, create it
-				var err error
-				heartbeatGroupID, err = heartbeat.CreateHeartbeatGroup(authToken, heartbeatGroupID)
-				if err != nil {
-						fmt.Println("Error creating heartbeat group:", err)
-						os.Exit(1)
-				}
+			// If heartbeatGroup does not exist, create it
+			var err error
+			heartbeatGroupID, err = heartbeat.CreateHeartbeatGroup(authToken, heartbeatGroupID)
+			if err != nil {
+				fmt.Println("Error creating heartbeat group:", err)
+				os.Exit(1)
+			}
 		}
 	}
 
@@ -144,7 +145,7 @@ func HandleCommandLineOptions() {
 		}
 
 		limiter := rate.NewLimiter(3, 1) // 3 requests per second, no burst
-	
+
 		// Iterate over cronTasks and call PrepareConfigJson for each task
 		for i, cronTask := range cronTasks {
 
@@ -153,21 +154,21 @@ func HandleCommandLineOptions() {
 				fmt.Println("Waiting for API.")
 				return
 			}
-		
+
 			delay := ctx.Delay()
 			time.Sleep(delay)
 
 			data, err := heartbeat.PrepareConfigJson(cronTask.Spec, cronTask.Name, heartbeatGroupID)
 			if err != nil {
-					fmt.Println("Error preparing config JSON:", err)
-					continue // Skip to the next iteration of the loop
+				fmt.Println("Error preparing config JSON:", err)
+				continue // Skip to the next iteration of the loop
 			}
 
 			// Create the Heartbeat
 			responseBodyURL, err := heartbeat_mock.CreateHeartbeat(authToken, data)
 			if err != nil {
-					fmt.Println("Error creating heartbeat:", err)
-					continue // Skip to the next iteration of the loop
+				fmt.Println("Error creating heartbeat:", err)
+				continue // Skip to the next iteration of the loop
 			}
 			fmt.Println("Heartbeat created successfully:", responseBodyURL)
 
@@ -178,7 +179,8 @@ func HandleCommandLineOptions() {
 		err = crontab.AppendCronsCommand(cronTasks, crontabUser)
 		if err != nil {
 			fmt.Println("Error appending curl command to cron tasks:", err)
+			return
 		}
 		fmt.Println("Curl commands appended to cron tasks successfully.")
-	}	
+	}
 }

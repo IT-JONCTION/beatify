@@ -4,17 +4,17 @@ import (
 	"bufio"
 	"fmt"
 	"io/ioutil"
-	"os"
-	"strings"
-	"os/exec"
 	"net/url"
+	"os"
+	"os/exec"
 	"regexp"
+	"strings"
 )
 
 type CronTask struct {
-	Spec string
-	Task string
-	Name string
+	Spec         string
+	Task         string
+	Name         string
 	HeartbeatURL string
 }
 
@@ -108,8 +108,11 @@ func updateCronTask(cronTask CronTask, lines []string) ([]string, error) {
 
 // helper function to write updated cron tasks back to the file
 func writeCronTasksToFile(crontabFile string, updatedLines []string) error {
+	// Join the updated lines with newline characters
+	fileContent := strings.Join(updatedLines, "\n") + "\n"
+
 	// Write the updated lines back to the crontab file
-	err := ioutil.WriteFile(crontabFile, []byte(strings.Join(updatedLines, "\n")), 0644)
+	err := ioutil.WriteFile(crontabFile, []byte(fileContent), 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write updated crontab file: %w", err)
 	}
@@ -139,41 +142,41 @@ func ParseAndApproveCronTasks(crontabUser string) ([]CronTask, error) {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-	
+
 		// If cron task contains "uptime.betterstack", skip and inform user
 		if strings.Contains(line, "uptime.betterstack") {
 			fmt.Println("Skipping cron task containing 'uptime.betterstack.com':", line)
 			continue
 		}
-	
+
 		// Display the cron task and ask for approval
 		fmt.Println("Cron task:", line)
 		isApproved, exitLoop, err := promptApproval()
 		if err != nil {
-				return nil, fmt.Errorf("failed to get approval: %w", err)
+			return nil, fmt.Errorf("failed to get approval: %w", err)
 		}
 		if exitLoop {
-				break
+			break
 		}
 		if !isApproved {
-				continue
+			continue
 		}
-	
+
 		// Prompt the user to enter the name for the heartbeat
 		name, err := promptHeartbeatName()
 		if err != nil {
 			return nil, err
 		}
-	
+
 		fields := strings.Fields(line)
 		if len(fields) < 6 {
 			fmt.Println("Skipping invalid cron task:", line)
 			continue
 		}
-	
+
 		spec := strings.Join(fields[:5], " ")
 		task := strings.Join(fields[5:], " ")
-	
+
 		approvedCronTasks = append(approvedCronTasks, CronTask{
 			Spec: spec,
 			Task: task,
@@ -209,7 +212,7 @@ func promptApproval() (bool, bool, error) {
 	if err != nil {
 		return false, false, fmt.Errorf("error reading input: %w", err)
 	}
-	text = strings.TrimSpace(strings.ToLower(text))
+	text = strings.TrimSpace(text)
 
 	switch text {
 	case "y":
@@ -228,8 +231,8 @@ func DumpCrontabToFile(crontabUser, fileType string) error {
 	if err := IsValidUsername(crontabUser); err != nil {
 		return err
 	}
+
 	var err error
-	var cmd *exec.Cmd
 	var filePath string
 
 	// Determine file type and create file accordingly
@@ -258,17 +261,26 @@ func DumpCrontabToFile(crontabUser, fileType string) error {
 		return fmt.Errorf("invalid file type: %s", fileType)
 	}
 
-	// Check if crontabUser is supplied
+	// Get the crontab file path
+	crontabFilePath := ""
 	if crontabUser != "" {
-		// Dump crontab for specific user to specified file
-		cmd = exec.Command("sh", "-c", fmt.Sprintf("crontab -u %s -l > %s", crontabUser, filePath))
+		// User-specific crontab file
+		crontabFilePath = fmt.Sprintf("/var/spool/cron/crontabs/%s", crontabUser)
 	} else {
-		// Dump crontab to specified file
-		cmd = exec.Command("sh", "-c", fmt.Sprintf("crontab -l > %s", filePath))
+		// Current user's crontab file
+		crontabFilePath = fmt.Sprintf("/var/spool/cron/crontabs/%s", os.Getenv("USER"))
 	}
 
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to dump crontab to %s: %w", filePath, err)
+	// Read the crontab file
+	bytes, err := ioutil.ReadFile(crontabFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to read crontab file: %w", err)
+	}
+
+	// Write the crontab content to the file
+	err = ioutil.WriteFile(filePath, bytes, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write crontab to file: %w", err)
 	}
 
 	return nil
@@ -299,8 +311,8 @@ func AppendCronsCommand(cronTasks []CronTask, crontabUser string) error {
 		return err
 	}
 
-  // Prepare the temporary and backup crontab files
-  if err := PrepareCrontabFiles(crontabUser); err != nil {
+	// Prepare the temporary and backup crontab files
+	if err := PrepareCrontabFiles(crontabUser); err != nil {
 		return err
 	}
 
@@ -348,7 +360,7 @@ func reloadCrontab(fileName, crontabUser string) error {
 	}
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-			return fmt.Errorf("failed to load crontab from %s: %w\nOutput: %s", fileName, err, string(output))
+		return fmt.Errorf("failed to load crontab from %s: %w\nOutput: %s", fileName, err, string(output))
 	}
 
 	// Cleanup: Delete the temporary file
