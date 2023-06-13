@@ -9,7 +9,6 @@ import (
 	"github.com/IT-JONCTION/beatify/config"
 	"github.com/IT-JONCTION/beatify/crontab"
 	"github.com/IT-JONCTION/beatify/heartbeat"
-	"github.com/IT-JONCTION/beatify/heartbeat_mock"
 	"github.com/spf13/pflag"
 	"golang.org/x/time/rate"
 )
@@ -106,7 +105,7 @@ func HandleCommandLineOptions() {
 	// Check if heartbeatGroup is set
 	if heartbeatGroupID != "" {
 		// Get the ID of the heartbeat group if it exists
-		heartbeatGroupID = heartbeat_mock.GetHeartbeatGroupID(authToken, heartbeatGroupID)
+		heartbeatGroupID = heartbeat.GetHeartbeatGroupID(authToken, heartbeatGroupID)
 		if heartbeatGroupID == "" {
 			// If heartbeatGroup does not exist, create it
 			var err error
@@ -165,7 +164,7 @@ func HandleCommandLineOptions() {
 			}
 
 			// Create the Heartbeat
-			responseBodyURL, err := heartbeat_mock.CreateHeartbeat(authToken, data)
+			responseBodyURL, err := heartbeat.CreateHeartbeat(authToken, data)
 			if err != nil {
 				fmt.Println("Error creating heartbeat:", err)
 				continue // Skip to the next iteration of the loop
