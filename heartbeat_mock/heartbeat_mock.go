@@ -1,7 +1,6 @@
 package heartbeat_mock
 
 import (
-	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"math/rand"
