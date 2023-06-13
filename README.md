@@ -12,6 +12,8 @@ Beatify reads the user's crontab, presents each cron task for approval to create
 ## Options
 
 - `-a, --auth-token AUTH_TOKEN`: Optional. The authentication token for the BetterUptime API. If not provided, the tool will prompt for it during runtime.
+- `-g, --heartbeat-group HEARTBEAT_GROUP`: Optional. The heartbeat group to add the heartbeat to. If not provided,
+  the tool will default to creating the heartbeats without a group.
 - `-u, --user USER`: Optional. The crontab user to edit. If not provided, the tool will default to the current user's crontab.
 - `-h, --help`: Display the help message and exit.
 
