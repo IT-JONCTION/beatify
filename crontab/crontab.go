@@ -240,8 +240,8 @@ func DumpCrontabToFile(crontabUser, fileType string) error {
 			if err != nil {
 				return fmt.Errorf("failed to create temp file: %w", err)
 			}
-			filePath = TempFile.Name()
 		}
+		filePath = TempFile.Name()
 	case "backup":
 		// Use the user's home directory to store backup file
 		homeDir, err := os.UserHomeDir()
@@ -254,6 +254,8 @@ func DumpCrontabToFile(crontabUser, fileType string) error {
 			return fmt.Errorf("failed to open or create backup file: %w", err)
 		}
 		filePath = BackupFile.Name()
+	default:
+		return fmt.Errorf("invalid file type: %s", fileType)
 	}
 
 	// Check if crontabUser is supplied
@@ -344,9 +346,9 @@ func reloadCrontab(fileName, crontabUser string) error {
 		// Load crontab from specified file
 		cmd = exec.Command("sh", "-c", fmt.Sprintf("crontab %s", fileName))
 	}
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to load crontab from %s: %w", fileName, err)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+			return fmt.Errorf("failed to load crontab from %s: %w\nOutput: %s", fileName, err, string(output))
 	}
 
 	// Cleanup: Delete the temporary file
@@ -354,7 +356,7 @@ func reloadCrontab(fileName, crontabUser string) error {
 		return fmt.Errorf("failed to remove temporary file: %w", err)
 	}
 
-	fmt.Println("Cron tasks updated successfully.")
+	fmt.Println("End.")
 
 	return nil
 }

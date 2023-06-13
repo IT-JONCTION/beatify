@@ -1,6 +1,6 @@
 # Test Cron Job
 0 * * * * echo "This is a do test cron job" >> /var/log/test-cron.log 2>&1
 * 0 * * * echo "This is a dont test cron job" >> /var/log/test-cron.log 2>&1
-* * 0 * * echo "This is a do test cron job" >> /var/log/test-cron.log 2>&1
-* * * 0 * echo "This is a dont test cron job" >> /var/log/test-cron.log 2>&1
+* * 1 * * echo "This is a do test cron job" >> /var/log/test-cron.log 2>&1
+* * * 1 * echo "This is a dont test cron job" >> /var/log/test-cron.log 2>&1
 * * * * 0 echo "This is a do test cron job" >> /var/log/test-cron.log 2>&1
