@@ -33,3 +33,12 @@ func CreateHeartbeatGroup(authToken string, heartbeatGroupName string) (string, 
 
 	return heartbeatGroupID, nil
 }
+
+func GetHeartbeatGroupID(authToken string, heartbeatGroupName string) string {
+	rand.Seed(time.Now().UnixNano())
+
+	// Generate a random 3-digit integer
+	heartbeatGroupID := fmt.Sprintf("%03d", rand.Intn(1000))
+
+	return heartbeatGroupID
+}
