@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"math/rand"
+	"time"
 )
 
 // Function to create heartbeat (fake implementation)
@@ -21,4 +23,13 @@ func CreateHeartbeat(authToken string, jsonData string) (string, error) {
 	// Return a fake URL with the random string appended
 	fakeURL := "https://uptime.betterstack.fake.com/heartbeat/" + randomString
 	return fakeURL, nil
+}
+
+func CreateHeartbeatGroup(authToken string, heartbeatGroupName string) (string, error) {
+	rand.Seed(time.Now().UnixNano())
+
+	// Generate a random 3-digit integer
+	heartbeatGroupID := fmt.Sprintf("%03d", rand.Intn(1000))
+
+	return heartbeatGroupID, nil
 }
