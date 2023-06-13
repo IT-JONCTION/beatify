@@ -1,13 +1,16 @@
 package heartbeat
 
 import (
-	"fmt"
-	"time"
-	"github.com/robfig/cron"
-	"encoding/json"
-	"net/http"
 	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"net/http"
+	"time"
+
+	"github.com/robfig/cron"
+	"golang.org/x/time/rate"
 )
 
 type HeartbeatResponse struct {
@@ -15,20 +18,20 @@ type HeartbeatResponse struct {
 		ID         string `json:"id"`
 		Type       string `json:"type"`
 		Attributes struct {
-			URL                string `json:"url"`
-			Name               string `json:"name"`
-			Period             int    `json:"period"`
-			Grace              int    `json:"grace"`
-			Call               bool   `json:"call"`
-			SMS                bool   `json:"sms"`
-			Email              bool   `json:"email"`
-			Push               bool   `json:"push"`
-			TeamWait           int    `json:"team_wait"`
-			HeartbeatGroupID   string `json:"heartbeat_group_id"`
-			SortIndex          int    `json:"sort_index"`
-			PausedAt           string `json:"paused_at"`
-			CreatedAt          string `json:"created_at"`
-			UpdatedAt          string `json:"updated_at"`
+			URL              string `json:"url"`
+			Name             string `json:"name"`
+			Period           int    `json:"period"`
+			Grace            int    `json:"grace"`
+			Call             bool   `json:"call"`
+			SMS              bool   `json:"sms"`
+			Email            bool   `json:"email"`
+			Push             bool   `json:"push"`
+			TeamWait         int    `json:"team_wait"`
+			HeartbeatGroupID int    `json:"heartbeat_group_id"`
+			SortIndex        int    `json:"sort_index"`
+			PausedAt         string `json:"paused_at"`
+			CreatedAt        string `json:"created_at"`
+			UpdatedAt        string `json:"updated_at"`
 		} `json:"attributes"`
 	} `json:"data"`
 }
@@ -42,86 +45,110 @@ type HeartbeatGroupResponse struct {
 			SortIndex int    `json:"sort_index"`
 			CreatedAt string `json:"created_at"`
 			UpdatedAt string `json:"updated_at"`
-			Paused 	  bool   `json:"paused"`
+			Paused    bool   `json:"paused"`
 		} `json:"attributes"`
 	} `json:"data"`
 }
 
-	// Function get the ID of the heartbeat group if it exists
-	func GetHeartbeatGroupID(authToken string, heartbeatGroupName string) string {
-		url := "https://uptime.betterstack.com/api/v2/heartbeat_groups"
+type Pagination struct {
+	First string `json:"first"`
+	Last  string `json:"last"`
+	Prev  string `json:"prev"`
+	Next  string `json:"next"`
+}
 
-		// Create a new HTTP request
+type HeartbeatGroupsResponse struct {
+	Data []struct {
+		ID         string `json:"id"`
+		Type       string `json:"type"`
+		Attributes struct {
+			Name      string `json:"name"`
+			SortIndex int    `json:"sort_index"`
+			CreatedAt string `json:"created_at"`
+			UpdatedAt string `json:"updated_at"`
+			Paused    bool   `json:"paused"`
+		} `json:"attributes"`
+	} `json:"data"`
+	Pagination Pagination `json:"pagination"`
+}
+
+func GetHeartbeatGroupID(authToken string, heartbeatGroupName string) (string, error) {
+	limiter := rate.NewLimiter(1, 5) // Limit to 1 request per second, with bursts up to 5 requests.
+	url := "https://uptime.betterstack.com/api/v2/heartbeat-groups"
+
+	for {
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
-			fmt.Println("Error creating HTTP request:", err)
-			return ""
+			return "", fmt.Errorf("Error creating HTTP request: %w", err)
 		}
 
-		// Set the Authorization header
 		req.Header.Set("Authorization", "Bearer "+authToken)
 		req.Header.Set("Content-Type", "application/json")
 
-		// Create a new HTTP client and send the request
 		client := http.Client{}
+		err = limiter.Wait(context.Background()) // Wait for the limiter to allow us to make the request.
+		if err != nil {
+			return "", fmt.Errorf("Error waiting for rate limiter: %w", err)
+		}
+
 		resp, err := client.Do(req)
 		if err != nil {
-			fmt.Println("Error sending HTTP request:", err)
-			return ""
+			return "", fmt.Errorf("Error sending HTTP request: %w", err)
 		}
 		defer resp.Body.Close()
 
-		// Check the response status code
-		if resp.StatusCode != http.StatusOK {
-			// If the status code indicates that the group wasn't found, treat it as a normal condition
-			if resp.StatusCode != http.StatusNotFound {
-				fmt.Println("Error response status code:", resp.StatusCode)
-			}
-			return ""
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+			return "", fmt.Errorf("Error response status code: %d", resp.StatusCode)
 		}
 
-		// Read the response body
+		// If the status is StatusNotFound, return an empty string without an error
+		if resp.StatusCode == http.StatusNotFound {
+			return "", nil
+		}
+
 		responseBody, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			fmt.Println("Error reading response body:", err)
-			return ""
+			return "", fmt.Errorf("Error reading response body: %w", err)
 		}
 
-		// Extract the GroupId from the response body
-		heartbeatGroupID, err := extractHeartbeatGroupIDFromResponse(responseBody, heartbeatGroupName)
+		var response HeartbeatGroupsResponse
+		err = json.Unmarshal(responseBody, &response)
 		if err != nil {
-			// Ignore the error when GroupId can't be found
-			heartbeatGroupID = ""
+			return "", fmt.Errorf("Error unmarshalling response body: %w", err)
 		}
 
-		return heartbeatGroupID
+		for _, data := range response.Data {
+			if data.Attributes.Name == heartbeatGroupName {
+				return data.ID, nil
+			}
+		}
+
+		if response.Pagination.Next == "" {
+			break
+		}
+		url = response.Pagination.Next
+		time.Sleep(1 * time.Second) // Sleep to respect the rate limit.
 	}
 
-	func extractHeartbeatGroupIDFromResponse(responseBody []byte, heartbeatGroupName string) (string, error) {
-		var heartbeatGroupResp HeartbeatGroupResponse
-		err := json.Unmarshal(responseBody, &heartbeatGroupResp)
-		if err != nil {
-			return "", fmt.Errorf("failed to unmarshal response body: %w", err)
-		}
-	
-		if heartbeatGroupResp.Data.Attributes.Name == heartbeatGroupName {
-			return heartbeatGroupResp.Data.ID, nil
-		}
-	
-		return "", fmt.Errorf("heartbeat-group not found")
-	}
-	
+	return "", nil
+}
 
-// function to create heartbeat-group
 func CreateHeartbeatGroup(authToken string, heartbeatGroupName string) (string, error) {
 	url := "https://uptime.betterstack.com/api/v2/heartbeat-groups"
 
-	jsonData := fmt.Sprintf(`{
-		"name": "%s"
-	}`, heartbeatGroupName)
+	// Define the data to send in the request body
+	data := map[string]string{
+		"name": heartbeatGroupName,
+	}
+
+	// Convert the data to JSON
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return "", fmt.Errorf("Error creating JSON request body: %w", err)
+	}
 
 	// Create a new HTTP request
-	req, err := http.NewRequest("POST", url, bytes.NewBufferString(jsonData))
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", fmt.Errorf("Error creating HTTP request: %w", err)
 	}
@@ -139,7 +166,7 @@ func CreateHeartbeatGroup(authToken string, heartbeatGroupName string) (string, 
 	defer resp.Body.Close()
 
 	// Check the response status code
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusCreated {
 		return "", fmt.Errorf("Error response status code: %d", resp.StatusCode)
 	}
 
@@ -158,12 +185,24 @@ func CreateHeartbeatGroup(authToken string, heartbeatGroupName string) (string, 
 	return heartbeatGroupID, nil
 }
 
+func extractHeartbeatGroupIDFromResponse(responseBody []byte, heartbeatGroupName string) (string, error) {
+	var heartbeatGroupResp HeartbeatGroupResponse
+	err := json.Unmarshal(responseBody, &heartbeatGroupResp)
+	if err != nil {
+		return "", fmt.Errorf("failed to unmarshal Heartbeat Groups response body: %w", err)
+	}
+	if heartbeatGroupResp.Data.Attributes.Name == heartbeatGroupName {
+		return heartbeatGroupResp.Data.ID, nil
+	}
+	return "", fmt.Errorf("heartbeat group not found")
+}
+
 // Utility function to extract URL from response body
 func extractURLFromResponse(responseBody []byte) (string, error) {
 	var heartbeatResp HeartbeatResponse
 	err := json.Unmarshal(responseBody, &heartbeatResp)
 	if err != nil {
-		return "", fmt.Errorf("failed to unmarshal response body: %w", err)
+		return "", fmt.Errorf("failed to unmarshal Heartbeat response body: %w", err)
 	}
 
 	return heartbeatResp.Data.Attributes.URL, nil

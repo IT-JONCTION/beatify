@@ -14,10 +14,10 @@ import (
 )
 
 var (
-	authToken        string
-	crontabUser      string
-	showHelp         bool
-	heartbeatGroupID string
+	authToken          string
+	crontabUser        string
+	showHelp           bool
+	heartbeatGroupName string
 )
 
 var manpageTemplate = `
@@ -78,7 +78,7 @@ func init() {
 	// Define command-line flags
 	pflag.StringVarP(&authToken, "auth-token", "a", "", "Authentication token for the BetterUptime API")
 	pflag.StringVarP(&crontabUser, "user", "u", "", "Crontab user to edit")
-	pflag.StringVarP(&heartbeatGroupID, "heartbeat-group", "g", "", "Heartbeat group to add the heartbeat to")
+	pflag.StringVarP(&heartbeatGroupName, "heartbeat-group", "g", "", "Heartbeat group to add the heartbeat to")
 	pflag.BoolVarP(&showHelp, "help", "h", false, "Show help message")
 
 	// Customize usage message
@@ -89,6 +89,7 @@ func init() {
 
 func HandleCommandLineOptions() {
 	pflag.Parse()
+	var heartbeatGroupID string
 
 	if showHelp {
 		// Display the help message and exit
@@ -103,13 +104,18 @@ func HandleCommandLineOptions() {
 	}
 
 	// Check if heartbeatGroup is set
-	if heartbeatGroupID != "" {
+	if heartbeatGroupName != "" {
 		// Get the ID of the heartbeat group if it exists
-		heartbeatGroupID = heartbeat.GetHeartbeatGroupID(authToken, heartbeatGroupID)
+		var err error
+		heartbeatGroupID, err = heartbeat.GetHeartbeatGroupID(authToken, heartbeatGroupName)
+		if err != nil {
+			fmt.Println("Error whilst checking heartbeat group:", err)
+			os.Exit(1)
+		}
 		if heartbeatGroupID == "" {
 			// If heartbeatGroup does not exist, create it
 			var err error
-			heartbeatGroupID, err = heartbeat.CreateHeartbeatGroup(authToken, heartbeatGroupID)
+			heartbeatGroupID, err = heartbeat.CreateHeartbeatGroup(authToken, heartbeatGroupName)
 			if err != nil {
 				fmt.Println("Error creating heartbeat group:", err)
 				os.Exit(1)
